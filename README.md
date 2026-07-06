@@ -20,16 +20,27 @@ Tap the left/right edge of the screen (or use physical left/right keys) to move 
 - **Calendar** — A heatmap of your daily reading habits for the current month.
 - **Monthly & Yearly Summaries** — Detailed lists of exactly which books you read in that period, complete with session counts, covers, and completion status.
 
-## Building
+## Installation (For Regular Users)
 
-This project is built in C++ using the official PocketBook SDK (inkview). 
+The easiest way to use this app is to install the pre-compiled version:
+
+1. Download the `Reading Stats.app` file from the `release/` folder in this repository.
+2. Connect your PocketBook to your computer via USB.
+3. Copy the `Reading Stats.app` file into your PocketBook's `applications/` folder.
+4. Eject the device, and the app will appear in your Applications menu!
+
+*(Optional: If you want a custom icon, place a 114x114 BMP file named `Reading Stats.app.bmp` next to the app in the `applications/` folder).*
+
+## Building from Source (For Developers)
+
+This project is built in C++ using the official PocketBook SDK (inkview). If you want to edit the code and compile it yourself:
 
 ```bash
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=/path/to/your/pocketbook_toolchain.cmake
 cmake --build build
 ```
 
-This produces a single `pbreadstats` binary. Rename it to `Reading Stats.app` and copy it to the `/applications/` folder on your PocketBook. To give it an icon, place a 114x114 BMP file named `Reading Stats.app.bmp` next to it.
+This produces a single `pbreadstats` binary. You can rename it to `Reading Stats.app` and deploy it.
 
 ## How it works under the hood
 
