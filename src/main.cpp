@@ -44,7 +44,7 @@ static ifont *g_font_huge = NULL;
 static const int COVER_W = 50;
 static const int COVER_H = 70;
 
-enum PageKind { PAGE_OVERVIEW, PAGE_CALENDAR, PAGE_MONTH, PAGE_YEAR };
+enum PageKind { PAGE_OVERVIEW, PAGE_CALENDAR, PAGE_HISTORY };
 
 struct PageDesc {
     PageKind kind;
@@ -85,9 +85,9 @@ static const char *MONTH_NAME(int month) {
     return (month >= 1 && month <= 12) ? names[month - 1] : "";
 }
 
-// Rebuilds the flat page list from whatever's in the database right
-// now. Cheap enough to call every time the screen is shown, and
-// keeps a freshly-finished session's month/year visible immediately.
+static std::vector<int> g_history_years;
+static int g_history_year_idx = 0;
+
 static void rebuild_pages() {
     std::string current_label = (!g_pages.empty() && g_page_index < (int)g_pages.size())
         ? g_pages[g_page_index].label : "";
@@ -96,9 +96,16 @@ static void rebuild_pages() {
     g_pages.push_back({PAGE_OVERVIEW, 0, 0, "Overview"});
     g_pages.push_back({PAGE_CALENDAR, 0, 0, "Calendar"});
 
+    g_history_years.clear();
+    for (const auto &y : db_get_yearly_stats(20)) {
+        g_history_years.push_back(y.year);
+    }
+    if (!g_history_years.empty()) {
+        g_pages.push_back({PAGE_HISTORY, 0, 0, "History"});
+    }
 
-    for (const auto &y : db_get_yearly_stats(6)) {
-        g_pages.push_back({PAGE_YEAR, y.year, 0, y.label});
+    if (g_history_year_idx >= (int)g_history_years.size()) {
+        g_history_year_idx = 0;
     }
 
     // Try to stay on the same page across a rebuild; fall back to
@@ -368,8 +375,29 @@ static void draw_overview() {
     }
 }
 
-static void draw_yearly_detail(int year, const std::string &header) {
-    draw_header(header);
+static void draw_history_page() {
+    if (g_history_years.empty()) return;
+    int year = g_history_years[g_history_year_idx];
+
+    // Custom Header for History with arrows
+    int h = S(50);
+    FillArea(0, 0, ScreenWidth(), h, WHITE);
+    DrawLine(0, h - 1, ScreenWidth(), h - 1, LGRAY);
+    SetFont(g_font_title, BLACK);
+    
+    char title[32];
+    snprintf(title, sizeof(title), "%d", year);
+    int tw = StringWidth(title);
+    DrawString((ScreenWidth() - tw) / 2, S(12), title);
+
+    SetFont(g_font_title, DGRAY);
+    if (g_history_year_idx < (int)g_history_years.size() - 1) {
+        DrawString(S(20), S(12), "<"); // Older years
+    }
+    if (g_history_year_idx > 0) {
+        int arr_w = StringWidth(">");
+        DrawString(ScreenWidth() - S(20) - arr_w, S(12), ">"); // Newer years
+    }
 
     std::vector<PeriodStat> months = db_get_monthly_stats_in_year(year);
 
@@ -385,8 +413,8 @@ static void draw_yearly_detail(int year, const std::string &header) {
     int cx = ScreenWidth() / 2;
     SetFont(g_font_huge, BLACK);
     std::string total_str = format_hms(total_seconds);
-    int tw = StringWidth(total_str.c_str());
-    DrawString(cx - tw / 2, y, total_str.c_str());
+    int total_tw = StringWidth(total_str.c_str());
+    DrawString(cx - total_tw / 2, y, total_str.c_str());
     y += S(70);
     
     SetFont(g_font_title, BLACK);
@@ -557,8 +585,8 @@ static void draw_dashboard() {
         draw_overview();
     } else if (p.kind == PAGE_CALENDAR) {
         draw_calendar();
-    } else { // PAGE_YEAR
-        draw_yearly_detail(p.year, p.label);
+    } else if (p.kind == PAGE_HISTORY) {
+        draw_history_page();
     }
 
     draw_footer_pageinfo();
@@ -694,12 +722,24 @@ static int main_handler(int type, int par1, int par2) {
             return 1;
 
         case EVT_POINTERUP: {
-            // Standard inkview convention: par1/par2 are the x/y
-            // coordinates of the pointer event. Left third goes
-            // back a page, right third goes forward; the middle is
-            // left free for a future "refresh" tap.
             int x = par1;
+            int y = par2;
             int third = ScreenWidth() / 3;
+
+            // Intercept year selector taps on the History page
+            if (!g_pages.empty() && g_pages[g_page_index].kind == PAGE_HISTORY && y < S(80)) {
+                if (x < third && g_history_year_idx < (int)g_history_years.size() - 1) {
+                    g_history_year_idx++; // Go older
+                    draw_dashboard();
+                    return 1;
+                } else if (x > third * 2 && g_history_year_idx > 0) {
+                    g_history_year_idx--; // Go newer
+                    draw_dashboard();
+                    return 1;
+                }
+            }
+
+            // Standard page navigation
             if (x < third && g_page_index > 0) {
                 g_page_index--;
                 draw_dashboard();
