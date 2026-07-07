@@ -128,10 +128,6 @@ static void draw_header(const std::string &title) {
     SetFont(g_font_title, BLACK);
     int tw = StringWidth(title.c_str());
     DrawString((ScreenWidth() - tw) / 2, S(12), title.c_str());
-
-    // Add Exit button 'X' to the Top Left
-    SetFont(g_font_title, DGRAY);
-    DrawString(S(20), S(12), "X");
 }
 
 static void draw_footer_pageinfo() {
@@ -395,10 +391,6 @@ static void draw_history_page() {
     SetFont(g_font_title, BLACK);
     int tw = StringWidth(full_title.c_str());
     DrawString((ScreenWidth() - tw) / 2, S(12), full_title.c_str());
-
-    // Add Exit button 'X' to the Top Left
-    SetFont(g_font_title, DGRAY);
-    DrawString(S(20), S(12), "X");
 
     std::vector<PeriodStat> months = db_get_monthly_stats_in_year(year);
 
@@ -726,12 +718,6 @@ static int main_handler(int type, int par1, int par2) {
             int x = par1;
             int y = par2;
             int third = ScreenWidth() / 3;
-
-            // Check for Exit tap (Top Left corner)
-            if (y < S(60) && x < S(80)) {
-                CloseApp();
-                return 0; // Return 0 to allow OS to process the touch release and cleanly exit/refresh
-            }
 
             // Intercept year selector taps on the History page
             if (!g_pages.empty() && g_pages[g_page_index].kind == PAGE_HISTORY && y < S(80)) {
