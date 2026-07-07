@@ -306,6 +306,46 @@ std::vector<PeriodStat> db_get_monthly_stats(int months_back) {
     return out;
 }
 
+std::vector<PeriodStat> db_get_monthly_stats_in_year(int year) {
+    std::vector<PeriodStat> out;
+    if (!g_db) return out;
+
+    sqlite3_stmt *stmt = NULL;
+    const char *sql =
+        "SELECT strftime('%Y', start_time, 'unixepoch', 'localtime') AS y, "
+        "       strftime('%m', start_time, 'unixepoch', 'localtime') AS m, "
+        "       SUM(duration_seconds), COUNT(*) "
+        "FROM sessions "
+        "WHERE strftime('%Y', start_time, 'unixepoch', 'localtime') = ? "
+        "GROUP BY y, m ORDER BY m DESC;";
+    if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL) != SQLITE_OK) return out;
+    
+    char year_str[8];
+    snprintf(year_str, sizeof(year_str), "%d", year);
+    sqlite3_bind_text(stmt, 1, year_str, -1, SQLITE_STATIC);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        PeriodStat p;
+        const unsigned char *y = sqlite3_column_text(stmt, 0);
+        int m = atoi(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)));
+        char label[32];
+        int idx = (m >= 1 && m <= 12) ? m - 1 : 0;
+        snprintf(label, sizeof(label), "%s", MONTH_NAMES[idx]);
+        p.label = label;
+        p.year = y ? atoi(reinterpret_cast<const char *>(y)) : 0;
+        p.month = m;
+        p.total_seconds = (long)sqlite3_column_int64(stmt, 2);
+        p.session_count = sqlite3_column_int(stmt, 3);
+        
+        // Also figure out books read in this month! We can query db_get_books_in_period
+        // or just rely on the main function doing it if needed.
+        // The struct PeriodStat doesn't have "books finished", but we don't strictly need it right here.
+        out.push_back(p);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+}
+
 std::vector<PeriodStat> db_get_yearly_stats(int years_back) {
     std::vector<PeriodStat> out;
     if (!g_db) return out;

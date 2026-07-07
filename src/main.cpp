@@ -96,9 +96,7 @@ static void rebuild_pages() {
     g_pages.push_back({PAGE_OVERVIEW, 0, 0, "Overview"});
     g_pages.push_back({PAGE_CALENDAR, 0, 0, "Calendar"});
 
-    for (const auto &m : db_get_monthly_stats(12)) {
-        g_pages.push_back({PAGE_MONTH, m.year, m.month, m.label});
-    }
+
     for (const auto &y : db_get_yearly_stats(6)) {
         g_pages.push_back({PAGE_YEAR, y.year, 0, y.label});
     }
@@ -370,13 +368,17 @@ static void draw_overview() {
     }
 }
 
-static void draw_period_detail(const std::string &header, time_t start, time_t end) {
+static void draw_yearly_detail(int year, const std::string &header) {
     draw_header(header);
 
-    std::vector<BookPeriodEntry> books = db_get_books_in_period(start, end);
+    std::vector<PeriodStat> months = db_get_monthly_stats_in_year(year);
 
     long total_seconds = 0;
-    for (const auto &b : books) total_seconds += b.total_seconds;
+    int total_sessions = 0;
+    for (const auto &m : months) {
+        total_seconds += m.total_seconds;
+        total_sessions += m.session_count;
+    }
 
     // Centered summary
     int y = S(80);
@@ -394,85 +396,48 @@ static void draw_period_detail(const std::string &header, time_t start, time_t e
     y += S(30);
 
     SetFont(g_font_body, DGRAY);
-    char bcount[32];
-    snprintf(bcount, sizeof(bcount), "%d book%s read", (int)books.size(), books.size() == 1 ? "" : "s");
-    int bw = StringWidth(bcount);
-    DrawString(cx - bw / 2, y, bcount);
+    char scount[64];
+    snprintf(scount, sizeof(scount), "%d session%s recorded", total_sessions, total_sessions == 1 ? "" : "s");
+    int sw = StringWidth(scount);
+    DrawString(cx - sw / 2, y, scount);
     y += S(40);
     
     draw_divider(y);
-    y += S(24);
+    y += S(30);
 
-    int cover_w = S(60);
-    int cover_h = S(85);
-    int text_x = S(32) + cover_w + S(16);
-    int max_tw = ScreenWidth() - text_x - S(32);
+    int margin = S(40);
+    int row_h = S(50);
 
-    for (size_t i = 0; i < books.size(); i++) {
-        const BookPeriodEntry &b = books[i];
+    for (size_t i = 0; i < months.size(); i++) {
+        const PeriodStat &m = months[i];
 
-        if (y + cover_h + S(16) > ScreenHeight() - S(40)) {
+        if (y + row_h > ScreenHeight() - S(40)) {
             char more[64];
-            snprintf(more, sizeof(more), "+ %d more", (int)(books.size() - i));
+            snprintf(more, sizeof(more), "+ %d more months", (int)(months.size() - i));
             SetFont(g_font_body, DGRAY);
             int mw = StringWidth(more);
             DrawString(cx - mw / 2, y + S(10), more);
             break;
         }
 
-        ibitmap *cover = metadata_cover(b.path, cover_w, cover_h);
-        if (cover) {
-            DrawBitmap(S(32), y, cover);
-        } else {
-            FillArea(S(32), y, cover_w, cover_h, LGRAY);
-            DrawRect(S(32), y, cover_w, cover_h, DGRAY);
-        }
+        SetFont(g_font_title, BLACK);
+        DrawString(margin, y, m.label.c_str());
 
-        SetFont(g_font_body, BLACK);
-        std::string title = b.title.empty() ? "(untitled)" : b.title;
-        // Truncate title
-        while (title.length() > 3 && StringWidth(title.c_str()) > max_tw) {
-            title = title.substr(0, title.length() - 4) + "...";
-        }
-        DrawString(text_x, y + S(4), title.c_str());
-
-        SetFont(g_font_small, DGRAY);
-        char line[192];
-        std::string author = b.author.empty() ? "" : b.author;
-        // Truncate author
-        while (author.length() > 3 && StringWidth(author.c_str()) > max_tw) {
-            author = author.substr(0, author.length() - 4) + "...";
-        }
-        if (!author.empty()) {
-            DrawString(text_x, y + S(28), author.c_str());
-        }
-
-        if (b.finished) {
-            snprintf(line, sizeof(line), "Finished  ·  %d sess", b.session_count);
-        } else {
-            snprintf(line, sizeof(line), "%d%% read  ·  %d sess", (int)(b.progress * 100), b.session_count);
-        }
-        DrawString(text_x, y + S(52), line);
-
-        // Progress bar
-        int bar_y = y + S(74);
-        int bar_w = max_tw;
-        int bar_h = S(6);
-        float progress = b.progress;
+        SetFont(g_font_body, DGRAY);
+        char detail[64];
+        snprintf(detail, sizeof(detail), "%s  ·  %d sess", format_hms(m.total_seconds).c_str(), m.session_count);
+        int dw = StringWidth(detail);
+        DrawString(ScreenWidth() - margin - dw, y + S(2), detail);
         
-        DrawRect(text_x, bar_y, bar_w, bar_h, DGRAY);
-        FillArea(text_x + 1, bar_y + 1, (int)((bar_w - 2) * progress), bar_h - 2, BLACK);
-
-        y += cover_h + S(24);
-        
-        if (i < books.size() - 1) {
-            draw_divider(y - S(12));
+        y += row_h;
+        if (i < months.size() - 1) {
+            draw_divider(y - S(16));
         }
     }
 
-    if (books.empty()) {
+    if (months.empty()) {
         SetFont(g_font_body, DGRAY);
-        const char *msg = "No books logged in this period.";
+        const char *msg = "No reading logged this year.";
         int mw = StringWidth(msg);
         DrawString(cx - mw / 2, y, msg);
     }
@@ -592,14 +557,8 @@ static void draw_dashboard() {
         draw_overview();
     } else if (p.kind == PAGE_CALENDAR) {
         draw_calendar();
-    } else if (p.kind == PAGE_MONTH) {
-        time_t start = month_start(p.year, p.month);
-        time_t end = (p.month == 12) ? month_start(p.year + 1, 1) : month_start(p.year, p.month + 1);
-        draw_period_detail(p.label, start, end);
     } else { // PAGE_YEAR
-        time_t start = year_start(p.year);
-        time_t end = year_start(p.year + 1);
-        draw_period_detail(p.label, start, end);
+        draw_yearly_detail(p.year, p.label);
     }
 
     draw_footer_pageinfo();

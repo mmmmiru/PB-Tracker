@@ -60,6 +60,7 @@ struct PeriodStat {
 // Most-recent-first, grouped by calendar month in local time.
 // `months_back` caps how many months of history come back.
 std::vector<PeriodStat> db_get_monthly_stats(int months_back = 12);
+std::vector<PeriodStat> db_get_monthly_stats_in_year(int year);
 
 // Most-recent-first, grouped by calendar year in local time.
 std::vector<PeriodStat> db_get_yearly_stats(int years_back = 6);
