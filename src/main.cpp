@@ -139,6 +139,11 @@ static void draw_footer_pageinfo() {
     SetFont(g_font_small, DGRAY);
     int w = StringWidth(line);
     DrawString((ScreenWidth() - w) / 2, fy + S(6), line);
+
+    // Add Exit button on the right
+    const char *exit_text = "Exit";
+    int ew = StringWidth(exit_text);
+    DrawString(ScreenWidth() - ew - S(30), fy + S(6), exit_text);
 }
 
 static void draw_divider(int y) {
@@ -725,6 +730,12 @@ static int main_handler(int type, int par1, int par2) {
             int x = par1;
             int y = par2;
             int third = ScreenWidth() / 3;
+
+            // Check for Exit tap (bottom right corner)
+            if (y > ScreenHeight() - S(40) && x > ScreenWidth() - S(100)) {
+                CloseApp();
+                return 1;
+            }
 
             // Intercept year selector taps on the History page
             if (!g_pages.empty() && g_pages[g_page_index].kind == PAGE_HISTORY && y < S(80)) {
