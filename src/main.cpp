@@ -128,6 +128,10 @@ static void draw_header(const std::string &title) {
     SetFont(g_font_title, BLACK);
     int tw = StringWidth(title.c_str());
     DrawString((ScreenWidth() - tw) / 2, S(12), title.c_str());
+
+    // Add Exit button 'X' to the Top Left
+    SetFont(g_font_title, DGRAY);
+    DrawString(S(20), S(12), "X");
 }
 
 static void draw_footer_pageinfo() {
@@ -139,11 +143,6 @@ static void draw_footer_pageinfo() {
     SetFont(g_font_small, DGRAY);
     int w = StringWidth(line);
     DrawString((ScreenWidth() - w) / 2, fy + S(6), line);
-
-    // Add Exit button on the right
-    const char *exit_text = "Exit";
-    int ew = StringWidth(exit_text);
-    DrawString(ScreenWidth() - ew - S(30), fy + S(6), exit_text);
 }
 
 static void draw_divider(int y) {
@@ -388,21 +387,18 @@ static void draw_history_page() {
     int h = S(50);
     FillArea(0, 0, ScreenWidth(), h, WHITE);
     DrawLine(0, h - 1, ScreenWidth(), h - 1, LGRAY);
-    SetFont(g_font_title, BLACK);
-    
-    char title[32];
-    snprintf(title, sizeof(title), "%d", year);
-    int tw = StringWidth(title);
-    DrawString((ScreenWidth() - tw) / 2, S(12), title);
+    std::string full_title = "";
+    if (g_history_year_idx < (int)g_history_years.size() - 1) full_title += "<   ";
+    full_title += std::to_string(year);
+    if (g_history_year_idx > 0) full_title += "   >";
 
+    SetFont(g_font_title, BLACK);
+    int tw = StringWidth(full_title.c_str());
+    DrawString((ScreenWidth() - tw) / 2, S(12), full_title.c_str());
+
+    // Add Exit button 'X' to the Top Left
     SetFont(g_font_title, DGRAY);
-    if (g_history_year_idx < (int)g_history_years.size() - 1) {
-        DrawString(S(20), S(12), "<"); // Older years
-    }
-    if (g_history_year_idx > 0) {
-        int arr_w = StringWidth(">");
-        DrawString(ScreenWidth() - S(20) - arr_w, S(12), ">"); // Newer years
-    }
+    DrawString(S(20), S(12), "X");
 
     std::vector<PeriodStat> months = db_get_monthly_stats_in_year(year);
 
@@ -731,19 +727,20 @@ static int main_handler(int type, int par1, int par2) {
             int y = par2;
             int third = ScreenWidth() / 3;
 
-            // Check for Exit tap (bottom right corner)
-            if (y > ScreenHeight() - S(40) && x > ScreenWidth() - S(100)) {
+            // Check for Exit tap (Top Left corner)
+            if (y < S(60) && x < S(80)) {
                 CloseApp();
-                return 1;
+                return 0; // Return 0 to allow OS to process the touch release and cleanly exit/refresh
             }
 
             // Intercept year selector taps on the History page
             if (!g_pages.empty() && g_pages[g_page_index].kind == PAGE_HISTORY && y < S(80)) {
-                if (x < third && g_history_year_idx < (int)g_history_years.size() - 1) {
+                // Since arrows are now centered, we just check the center-left and center-right
+                if (x > third && x < ScreenWidth() / 2 && g_history_year_idx < (int)g_history_years.size() - 1) {
                     g_history_year_idx++; // Go older
                     draw_dashboard();
                     return 1;
-                } else if (x > third * 2 && g_history_year_idx > 0) {
+                } else if (x > ScreenWidth() / 2 && x < third * 2 && g_history_year_idx > 0) {
                     g_history_year_idx--; // Go newer
                     draw_dashboard();
                     return 1;
